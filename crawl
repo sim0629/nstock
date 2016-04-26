@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+
+from bs4 import BeautifulSoup
+from pymongo import MongoClient
+import datetime
+import json
+import urllib.request
+
+client = MongoClient()
+db = client['nstock']
+col = db['news']
+
+PAGE_SIZE = 100
+LIST_URL_FORMAT = "http://m.stock.naver.com" + \
+                  "/api/json/news/newsListJson.nhn?category=itemnewslist" + \
+                  "&code=%s&pageSize=%d&page=%d"
+NEWS_URL_FORMAT = "http://m.stock.naver.com" + \
+                  "/api/html/item/itemNews.nhn?" + \
+                  "&code=%s&officeId=%s&articleId=%s"
+
+def requestList(code, page_size, page):
+    f = urllib.request.urlopen(LIST_URL_FORMAT % (code, page_size, page))
+    return json.loads(f.read().decode('utf-8'))
+
+def getListUntil(code, ts):
+    page = 0
+    while True:
+        page += 1
+        ret = requestList(code, PAGE_SIZE, page)
+        news_list = ret["result"]["newsList"]
+        if len(news_list) == 0:
+            return
+        for news in news_list:
+            if news["dt"] / 1000 < ts:
+                return
+            yield news
+
+def requestNews(code, oid, aid):
+    f = urllib.request.urlopen(NEWS_URL_FORMAT % (code, oid, aid))
+    return BeautifulSoup(f.read().decode('utf-8'), 'html5lib')
+
+def getNewsBody(code, news_item):
+    news = requestNews(code, news_item["oid"], news_item["aid"])
+    body = news.find("div", class_="newsct_body")
+    for br in body.findAll("br"):
+        br.extract()
+    text = str(body)
+    begin = text.find('>')
+    if begin == -1:
+        return None
+    begin += 1
+    end = text.find('<', begin)
+    if end == -1:
+        end = len(text)
+    return text[begin:end]
+
+def collectNews(code, ts):
+    news_list = list(getListUntil(code, ts))
+    for news_item in news_list:
+        title = news_item["tit"]
+        body = getNewsBody(code, news_item)
+        dt = datetime.datetime.fromtimestamp(news_item["dt"] / 1000)
+        print(title, dt)
+        col.insert_one({ "code": code, "title": title, "body": body, "dt": dt })
+
+def tsUntil():
+    today = datetime.datetime.now()
+    oneyearago = today - datetime.timedelta(days=365)
+    return oneyearago.timestamp()
+
+if __name__ == "__main__":
+    CODE = "084990" # 바이로메드
+    collectNews(CODE, tsUntil())
+
