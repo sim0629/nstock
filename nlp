@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+
+from konlpy.tag import Komoran
+from pymongo import MongoClient
+import datetime
+import math
+
+komoran = Komoran()
+
+client = MongoClient()
+db = client['nstock']
+news = db['news']
+price = db['price']
+
+def get_nts(n):
+    nts = {}
+    for doc in news.find().sort('dt', 1).limit(n):
+        for noun in set(komoran.nouns(doc['body'])):
+            if noun in nts:
+                nts[noun] += 1
+            else:
+                nts[noun] = 1
+    return nts
+
+def get_idf(nts, n):
+    idf = {}
+    for ntk in nts:
+        idf[ntk] = math.log10(n / nts[ntk])
+    return idf
+
+def get_tf_idf(idf, n, train):
+    if train:
+        col = news.find().sort('dt', 1).limit(n)
+    else:
+        col = news.find().sort('dt', 1).skip(n)
+    for doc in col:
+        # price
+        dt = doc['dt']
+        dtmin = dt.replace(minute=dt.minute//10*10, second=0, microsecond=0)
+        dtmax = dtmin + datetime.timedelta(minutes=20)
+        le = price.find_one({ 'dt': dtmin })
+        re = price.find_one({ 'dt': dtmax })
+        if le is None or re is None:
+            continue
+        ratio = (re['price'] - le['price']) / le['price']
+        # news
+        tf = {}
+        for noun in idf:
+            tf[noun] = 0
+        for noun in komoran.nouns(doc['body']):
+            if noun in tf:
+                tf[noun] += 1
+        max_tf = max(tf.values())
+        tfidf = []
+        for k in tf:
+            a = tf[k] / (max_tf + 1)
+            tfidf.append(a * idf[k])
+        yield (tfidf, ratio)
+
+if __name__ == '__main__':
+    n = 800
+    thres = 0.003 # 0.3%
+    nts = get_nts(n)
+    idf = get_idf(nts, n)
+    up = 0
+    down = 0
+    hold = 0
+    for r in get_tf_idf(idf, n, True):
+        if r >= thres:
+            up += 1
+        elif r <= -thres:
+            down += 1
+        else:
+            hold += 1
+    print(up, down, hold)
+
