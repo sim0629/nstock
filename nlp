@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 
+from keras.layers.core import Dense, Dropout, Activation
+from keras.models import Sequential
+from keras.utils.np_utils import to_categorical
 from konlpy.tag import Komoran
 from pymongo import MongoClient
 import datetime
 import math
+import numpy as np
 
 komoran = Komoran()
 
@@ -43,6 +47,13 @@ def get_tf_idf(idf, n, train):
         if le is None or re is None:
             continue
         ratio = (re['price'] - le['price']) / le['price']
+        thres = 0.003 # 0.3%
+        if ratio >= thres:
+            label = 2
+        elif ratio <= -thres:
+            label = 0
+        else:
+            label = 1
         # news
         tf = {}
         for noun in idf:
@@ -55,22 +66,53 @@ def get_tf_idf(idf, n, train):
         for k in tf:
             a = tf[k] / (max_tf + 1)
             tfidf.append(a * idf[k])
-        yield (tfidf, ratio)
+        yield (tfidf, label)
 
 if __name__ == '__main__':
+    print('getting training data...')
     n = 800
-    thres = 0.003 # 0.3%
     nts = get_nts(n)
     idf = get_idf(nts, n)
-    up = 0
-    down = 0
-    hold = 0
-    for r in get_tf_idf(idf, n, True):
-        if r >= thres:
-            up += 1
-        elif r <= -thres:
-            down += 1
-        else:
-            hold += 1
-    print(up, down, hold)
+    X = []
+    Y = []
+    for (x, y) in get_tf_idf(idf, n, True):
+        X.append(x)
+        Y.append(y)
+    X_train = np.asarray(X)
+    Y_train = to_categorical(Y)
+
+    print('preparing model...')
+    model = Sequential()
+    model.add(Dense(output_dim=256, input_dim=len(X[0]), activation='relu'))
+    model.add(Dropout(0.5))
+    model.add(Dense(256, activation='relu'))
+    model.add(Dropout(0.5))
+    model.add(Dense(3, activation='softmax'))
+    model.compile(loss='categorical_crossentropy', optimizer='sgd', metrics=['accuracy'])
+
+    print('fitting model...')
+    model.fit(X_train, Y_train, nb_epoch=30)
+
+    print('getting testing data...')
+    X = []
+    Y = []
+    for (x, y) in get_tf_idf(idf, n, False):
+        X.append(x)
+        Y.append(y)
+    X_test = np.asarray(X)
+
+    print('predicting...')
+    classes = model.predict_classes(X_test)
+
+    total = len(classes)
+    right = 0
+    sub = [0, 0, 0]
+    for i in range(total):
+        if Y[i] == classes[i]:
+            right += 1
+        sub[Y[i]] += 1
+    right = right / total * 100
+    sub = [s / total * 100 for s in sub]
+    print('accuracy: %.1f%%' % right)
+    print('(down, hold, up): (%.1f%%, %.1f%%, %.1f%%)' % tuple(sub))
 
