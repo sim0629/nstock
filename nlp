@@ -3,13 +3,16 @@
 from keras.layers.core import Dense, Dropout, Activation
 from keras.models import Sequential
 from keras.utils.np_utils import to_categorical
+from konlpy.tag import Hannanum
+from konlpy.tag import Kkma
 from konlpy.tag import Komoran
+from konlpy.tag import Mecab
 from pymongo import MongoClient
 import datetime
 import math
 import numpy as np
 
-komoran = Komoran()
+nlp = Mecab()
 
 client = MongoClient()
 db = client['nstock']
@@ -19,7 +22,7 @@ price = db['price']
 def get_nts(n):
     nts = {}
     for doc in news.find().sort('dt', 1).limit(n):
-        for noun in set(komoran.nouns(doc['body'])):
+        for noun in set(nlp.nouns(doc['body'])):
             if noun in nts:
                 nts[noun] += 1
             else:
@@ -58,7 +61,7 @@ def get_tf_idf(idf, n, train):
         tf = {}
         for noun in idf:
             tf[noun] = 0
-        for noun in komoran.nouns(doc['body']):
+        for noun in nlp.nouns(doc['body']):
             if noun in tf:
                 tf[noun] += 1
         max_tf = max(tf.values())
