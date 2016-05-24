@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from bs4 import BeautifulSoup
+from pymongo import ASCENDING
 from pymongo import MongoClient
 import datetime
 import json
@@ -9,6 +10,7 @@ import urllib.request
 client = MongoClient()
 db = client['nstock']
 col = db['news']
+col.create_index([('code', ASCENDING), ('dt', ASCENDING)], unique=True)
 
 PAGE_SIZE = 100
 LIST_URL_FORMAT = "http://m.stock.naver.com" + \
@@ -61,14 +63,25 @@ def collectNews(code, ts):
         body = getNewsBody(code, news_item)
         dt = datetime.datetime.fromtimestamp(news_item["dt"] / 1000)
         print(title, dt)
-        col.insert_one({ "code": code, "title": title, "body": body, "dt": dt })
+        doc = col.find_one({ "code": code, "dt": dt })
+        if doc is None:
+            col.insert_one({ "code": code, "title": title, "body": body, "dt": dt })
 
-def tsUntil():
+def tsUntil(days):
     today = datetime.datetime.now()
-    oneyearago = today - datetime.timedelta(days=365)
+    oneyearago = today - datetime.timedelta(days=days)
     return oneyearago.timestamp()
 
 if __name__ == "__main__":
-    CODE = "084990" # 바이로메드
-    collectNews(CODE, tsUntil())
+    codes = [
+        "084990", # 바이로메드
+        "214370", # 케어젠
+        "102940", # 코오롱생명과학
+        "095700", # 제넥신
+        "034830", # 한국토지신탁
+        "046890", # 서울반도체
+    ]
+    until = tsUntil(365)
+    for code in codes:
+        collectNews(code, until)
 
