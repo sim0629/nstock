@@ -73,6 +73,7 @@ def get_tf_idf(code, idf, n, train):
         yield (tfidf, label)
 
 def run(code):
+    print('===================================')
     n = int(news.find({ 'code': code }).count() * 0.8)
     print('code = %s, n = %d' % (code, n))
 
@@ -87,17 +88,20 @@ def run(code):
     X_train = np.asarray(X)
     Y_train = to_categorical(Y)
 
+    dim = len(X[0])
+    print('dim = %d' % dim)
+
     print('preparing model...')
     model = Sequential()
-    model.add(Dense(output_dim=256, input_dim=len(X[0]), activation='relu'))
+    model.add(Dense(output_dim=4096, input_dim=dim, init='uniform', activation='tanh'))
     model.add(Dropout(0.5))
-    model.add(Dense(256, activation='relu'))
+    model.add(Dense(1024, init='uniform', activation='tanh'))
     model.add(Dropout(0.5))
-    model.add(Dense(3, activation='softmax'))
+    model.add(Dense(3, init='uniform', activation='softmax'))
     model.compile(loss='categorical_crossentropy', optimizer='sgd', metrics=['accuracy'])
 
     print('fitting model...')
-    model.fit(X_train, Y_train, nb_epoch=30)
+    model.fit(X_train, Y_train, nb_epoch=50, verbose=2)
 
     print('getting testing data...')
     X = []
@@ -108,19 +112,23 @@ def run(code):
     X_test = np.asarray(X)
 
     print('predicting...')
-    classes = model.predict_classes(X_test)
+    classes = model.predict_classes(X_test, verbose=2)
 
     total = len(classes)
     right = 0
     sub = [0, 0, 0]
+    sup = [0, 0, 0]
     for i in range(total):
         if Y[i] == classes[i]:
             right += 1
         sub[Y[i]] += 1
+        sup[classes[i]] += 1
     right = right / total * 100
     sub = [s / total * 100 for s in sub]
+    sup = [s / total * 100 for s in sup]
     print('accuracy: %.1f%%' % right)
-    print('(down, hold, up): (%.1f%%, %.1f%%, %.1f%%)' % tuple(sub))
+    print('expected (down, hold, up): (%.1f%%, %.1f%%, %.1f%%)' % tuple(sub))
+    print('actual (down, hold, up): (%.1f%%, %.1f%%, %.1f%%)' % tuple(sup))
 
 if __name__ == '__main__':
     codes = [
@@ -131,4 +139,5 @@ if __name__ == '__main__':
         "034830", # 한국토지신탁
         "046890", # 서울반도체
     ]
-    run(codes[0])
+    for code in codes:
+        run(code)
