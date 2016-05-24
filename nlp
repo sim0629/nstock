@@ -50,14 +50,10 @@ def get_tf_idf(code, idf, n, train):
         re = price.find_one({ 'code': code, 'dt': dtmax })
         if le is None or re is None:
             continue
-        ratio = (re['price'] - le['price']) / le['price']
-        thres = 0.003 # 0.3%
-        if ratio >= thres:
-            label = 2
-        elif ratio <= -thres:
-            label = 0
-        else:
+        if re['price'] >= le['price']:
             label = 1
+        else:
+            label = 0
         # news
         tf = {}
         for noun in idf:
@@ -86,22 +82,22 @@ def run(code):
         X.append(x)
         Y.append(y)
     X_train = np.asarray(X)
-    Y_train = to_categorical(Y)
+    Y_train = np.asarray(Y)
 
     dim = len(X[0])
     print('dim = %d' % dim)
 
     print('preparing model...')
     model = Sequential()
-    model.add(Dense(output_dim=4096, input_dim=dim, init='uniform', activation='tanh'))
+    model.add(Dense(output_dim=4096, input_dim=dim, init='uniform', activation='relu'))
     model.add(Dropout(0.5))
-    model.add(Dense(1024, init='uniform', activation='tanh'))
+    model.add(Dense(1024, activation='relu'))
     model.add(Dropout(0.5))
-    model.add(Dense(3, init='uniform', activation='softmax'))
-    model.compile(loss='categorical_crossentropy', optimizer='sgd', metrics=['accuracy'])
+    model.add(Dense(1, activation='sigmoid'))
+    model.compile(loss='binary_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
 
     print('fitting model...')
-    model.fit(X_train, Y_train, nb_epoch=50, verbose=2)
+    model.fit(X_train, Y_train, nb_epoch=30, verbose=2)
 
     print('getting testing data...')
     X = []
@@ -116,8 +112,8 @@ def run(code):
 
     total = len(classes)
     right = 0
-    sub = [0, 0, 0]
-    sup = [0, 0, 0]
+    sub = [0, 0]
+    sup = [0, 0]
     for i in range(total):
         if Y[i] == classes[i]:
             right += 1
@@ -127,8 +123,8 @@ def run(code):
     sub = [s / total * 100 for s in sub]
     sup = [s / total * 100 for s in sup]
     print('accuracy: %.1f%%' % right)
-    print('expected (down, hold, up): (%.1f%%, %.1f%%, %.1f%%)' % tuple(sub))
-    print('actual (down, hold, up): (%.1f%%, %.1f%%, %.1f%%)' % tuple(sup))
+    print('expected (down, up): (%.1f%%, %.1f%%)' % tuple(sub))
+    print('actual (down, up): (%.1f%%, %.1f%%)' % tuple(sup))
 
 if __name__ == '__main__':
     codes = [
