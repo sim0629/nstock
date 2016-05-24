@@ -11,6 +11,7 @@ from pymongo import MongoClient
 import datetime
 import math
 import numpy as np
+import sys
 
 nlp = Mecab()
 
@@ -19,9 +20,9 @@ db = client['nstock']
 news = db['news']
 price = db['price']
 
-def get_nts(n):
+def get_nts(code, n):
     nts = {}
-    for doc in news.find().sort('dt', 1).limit(n):
+    for doc in news.find({ 'code': code }).sort('dt', 1).limit(n):
         for noun in set(nlp.nouns(doc['body'])):
             if noun in nts:
                 nts[noun] += 1
@@ -35,18 +36,18 @@ def get_idf(nts, n):
         idf[ntk] = math.log10(n / nts[ntk])
     return idf
 
-def get_tf_idf(idf, n, train):
+def get_tf_idf(code, idf, n, train):
     if train:
-        col = news.find().sort('dt', 1).limit(n)
+        col = news.find({ 'code': code }).sort('dt', 1).limit(n)
     else:
-        col = news.find().sort('dt', 1).skip(n)
+        col = news.find({ 'code': code }).sort('dt', 1).skip(n)
     for doc in col:
         # price
         dt = doc['dt']
         dtmin = dt.replace(minute=dt.minute//10*10, second=0, microsecond=0)
         dtmax = dtmin + datetime.timedelta(minutes=20)
-        le = price.find_one({ 'dt': dtmin })
-        re = price.find_one({ 'dt': dtmax })
+        le = price.find_one({ 'code': code, 'dt': dtmin })
+        re = price.find_one({ 'code': code, 'dt': dtmax })
         if le is None or re is None:
             continue
         ratio = (re['price'] - le['price']) / le['price']
@@ -71,14 +72,16 @@ def get_tf_idf(idf, n, train):
             tfidf.append(a * idf[k])
         yield (tfidf, label)
 
-if __name__ == '__main__':
+def run(code):
+    n = int(news.find({ 'code': code }).count() * 0.8)
+    print('code = %s, n = %d' % (code, n))
+
     print('getting training data...')
-    n = 800
-    nts = get_nts(n)
+    nts = get_nts(code, n)
     idf = get_idf(nts, n)
     X = []
     Y = []
-    for (x, y) in get_tf_idf(idf, n, True):
+    for (x, y) in get_tf_idf(code, idf, n, True):
         X.append(x)
         Y.append(y)
     X_train = np.asarray(X)
@@ -99,7 +102,7 @@ if __name__ == '__main__':
     print('getting testing data...')
     X = []
     Y = []
-    for (x, y) in get_tf_idf(idf, n, False):
+    for (x, y) in get_tf_idf(code, idf, n, False):
         X.append(x)
         Y.append(y)
     X_test = np.asarray(X)
@@ -119,3 +122,13 @@ if __name__ == '__main__':
     print('accuracy: %.1f%%' % right)
     print('(down, hold, up): (%.1f%%, %.1f%%, %.1f%%)' % tuple(sub))
 
+if __name__ == '__main__':
+    codes = [
+        "084990", # 바이로메드
+        "214370", # 케어젠
+        "102940", # 코오롱생명과학
+        "095700", # 제넥신
+        "034830", # 한국토지신탁
+        "046890", # 서울반도체
+    ]
+    run(codes[0])
