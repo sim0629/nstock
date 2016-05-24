@@ -1,23 +1,27 @@
 #!/usr/bin/env python3
 
+from pymongo import ASCENDING
 from pymongo import MongoClient
 import datetime
 import glob
 
 if __name__ == '__main__':
-    CODE = "084990" # 바이로메드
-
     client = MongoClient()
     db = client['nstock']
     col = db['price']
+    col.create_index([('code', ASCENDING), ('dt', ASCENDING)], unique=True)
 
-    for fn in glob.glob('ignore/*.txt'):
+    for fn in glob.glob('ignore/*-*.txt'):
+        print(fn)
+        code = fn.split('/')[1].split('-')[0]
         f = open(fn, 'r')
         for line in f.readlines():
             line = line.strip()
-            tok = line[len(line) - 22 : len(line)].split()
+            tok = line.split()
             dt = datetime.datetime.strptime(tok[0] + ' ' + tok[1], '%Y%m%d %H%M%S')
             price = int(tok[2])
-            col.insert_one({ 'code': CODE, 'dt': dt, 'price': price })
+            doc = col.find_one({ 'code': code, 'dt': dt })
+            if doc is None:
+                col.insert_one({ 'code': code, 'dt': dt, 'price': price })
         f.close()
 
