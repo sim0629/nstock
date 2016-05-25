@@ -68,6 +68,12 @@ def get_tf_idf(code, idf, n, train):
             tfidf.append(a * idf[k])
         yield (tfidf, label)
 
+def confusion_matrix(n, expected, predicted):
+    mat = np.zeros((n, n), dtype=np.int)
+    for i in range(len(expected)):
+        mat[expected[i]][predicted[i]] += 1
+    return mat
+
 def run(code):
     print('===================================')
     n = int(news.find({ 'code': code }).count() * 0.8)
@@ -91,9 +97,9 @@ def run(code):
     model = Sequential()
     model.add(Dense(output_dim=4096, input_dim=dim, init='uniform', activation='relu'))
     model.add(Dropout(0.5))
-    model.add(Dense(2048, activation='relu'))
+    model.add(Dense(2048, init='uniform', activation='relu'))
     model.add(Dropout(0.5))
-    model.add(Dense(1, activation='sigmoid'))
+    model.add(Dense(1, init='uniform', activation='sigmoid'))
     model.compile(loss='binary_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
 
     print('fitting model...')
@@ -110,21 +116,8 @@ def run(code):
     print('predicting...')
     classes = model.predict_classes(X_test, verbose=2)
 
-    total = len(classes)
-    right = 0
-    sub = [0, 0]
-    sup = [0, 0]
-    for i in range(total):
-        if Y[i] == classes[i]:
-            right += 1
-        sub[Y[i]] += 1
-        sup[classes[i]] += 1
-    right = right / total * 100
-    sub = [s / total * 100 for s in sub]
-    sup = [s / total * 100 for s in sup]
-    print('accuracy: %.1f%%' % right)
-    print('expected (down, up): (%.1f%%, %.1f%%)' % tuple(sub))
-    print('actual (down, up): (%.1f%%, %.1f%%)' % tuple(sup))
+    print('confusion matrix')
+    print(confusion_matrix(2, Y, classes))
 
 if __name__ == '__main__':
     codes = [
