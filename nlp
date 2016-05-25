@@ -99,9 +99,9 @@ def run(code):
 
     print('preparing model...')
     model = Sequential()
-    model.add(Dense(output_dim=4096, input_dim=dim, init='uniform', activation='relu'))
+    model.add(Dense(output_dim=4096, input_dim=dim, init='uniform', activation='tanh'))
     model.add(Dropout(0.5))
-    model.add(Dense(2048, init='uniform', activation='relu'))
+    model.add(Dense(2048, init='uniform', activation='tanh'))
     model.add(Dropout(0.5))
     model.add(Dense(3, init='uniform', activation='softmax'))
     model.compile(loss='categorical_crossentropy', optimizer='sgd', metrics=['accuracy'])
