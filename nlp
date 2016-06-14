@@ -107,7 +107,7 @@ def run(code):
     model.compile(loss='categorical_crossentropy', optimizer='sgd', metrics=['accuracy'])
 
     print('fitting model...')
-    model.fit(X_train, Y_train, nb_epoch=30, verbose=2)
+    model.fit(X_train, Y_train, nb_epoch=100, verbose=2)
 
     print('getting testing data...')
     X = []
