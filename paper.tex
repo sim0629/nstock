@@ -14,12 +14,119 @@
 \usepackage{float}
 \usepackage{multirow}
 
+\newdateformat{koreandate}{\THEYEAR년 \twodigit{\THEMONTH}월 \twodigit{\THEDAY}일}
+\renewcommand{\abstractname}{초록}
+\renewcommand{\contentsname}{목차}
+\renewcommand{\figurename}{그림}
+\renewcommand{\tablename}{표}
+
 \linespread{1.5}
 
 \begin{document}
 
-\section{haha}
+\title{뉴스 기사를 이용한 주식 가격의 변동 예측}
+\author{
+  서울대학교 컴퓨터공학부 \\
+  2009-11744 심규민
+}
+\date{\koreandate\today}
+\maketitle
 
+\begin{abstract}
 TODO
+\end{abstract}
+
+\tableofcontents
+
+\thispagestyle{empty}
+\pagebreak
+\setcounter{page}{1}
+
+\section{서론}
+
+\subsection{연구 목적}
+
+본 연구에서는 우리나라 주식 시장에 상장한 회사들에 관한 인터넷 뉴스 기사를 통해 그 회사들의 주가가 단기적으로 어떻게 변동할지 예측해보았다.
+효율적 시장 가설(Efficient Market Hypothesis)에 따르면 주식 시장에는 수많은 요인이 반영되어 있기 때문에, 주가는 예측할 수 없게 움직인다.
+주식 분석 방법 중 기본적 분석(Fundamental Analysis) 방법에 의하면 주가가 변동하는 요인은 회사의 실적, 전망 등 다양하다.
+이러한 요인들에 대한 소식은 입소문, 뉴스를 통해 전달되지만, ``소문에 사고 뉴스에 팔아라''는 말이 있는 것처럼 뉴스는 주가보다 늦게 반응한다는 것이 중론이다.
+그런데 Gidofalvi et al.의 연구에서 뉴스 기사로부터, 그 예측력은 낮지만 효율적 시장 가설에 반하는, 주가 변동의 예측이 가능함을 보여주었다.
+본 연구는 이 선행 연구를 검증하는 목적으로 NASDAQ 시장이 아닌 국내 시장에 적용하여 보고자 하였다.
+또한 선행 연구에서는 주가의 움직임을 예측할 때 나이브 베이즈 분류기(Naive Bayes Classifier)를 사용하였는데,
+본 연구에서는 이것을, 최근 기계학습(Machine Learning) 분야에서 주목받고 있는, 인공신경망(Artificial Neural Network)으로 대체해보았다.
+
+\subsection{선행 연구 분석}
+
+선행 연구(Gidofalvi et al. 2001)는 다음과 같이 크게 네가지 단계로 이루어졌다.
+\begin{enumerate}
+\item 주가 데이터 수집
+\item 주가에 따른 뉴스 기사의 정렬(alignment), 점수화(scoring), 분류(labelling)
+\item 나이브 베이즈 분류기 학습(training)
+\item 분류기 평가(evaluation)
+\end{enumerate}
+먼저, 특정 종목(회사)에 대해 시간별 주가 데이터를 수집한다.
+그리고 나서 그 종목 뉴스 각각에 대해 정렬, 점수화, 분류 과정을 거친다.
+정렬 과정에서는 임의의 시간 간격을 정해서 해당 뉴스가 공개된 시각을 기준으로 그 전 몇 분과 그 후 몇 분을 그 뉴스가 영향을 주는 범위로 보는 것이다.
+예를 들어 $[-20, 30]$ 시간 간격에 대해, 어떤 뉴스가 오전 10시 30분에 공개 되었다면, 이 뉴스가 주가에 영향을 주는 범위는 오전 10시 10분부터 11시 0분까지가 된다.
+정렬 과정에서는 이 범위가 주식 시장이 열려 있는 동안만으로 한정하여 그 밖에 위치한 뉴스들을 걸러내는 작업도 한다.
+점수화 과정은 뉴스가 영향을 주는 범위의 시작 시각과 끝나는 시각의 주가의 상대적 변화를 수치화 하는 과정이다.
+구체적으로는 끝나는 주가를 시작 주가로 나누어 로그를 취한 값($\Delta price$)을 정규화 하여 사용한다.
+정규화는 각 종목에 대한 $\Delta price$를 그 종목의 변동성($\beta$-값)으로 나누고, 주식 시장 index에 대한 $\Delta price$를 빼는 작업이다.
+분류 과정은 점수화의 결과가 특정 threshold $\rho_{positive}$, $\rho_{negative}$에 대해
+$\rho_{positive}$ 보다 크면 해당 뉴스에 의해 주가가 올랐다($UP$)고 표지하고,
+$\rho_{negative}$ 보다 작으면 내렸다($DOWN$)고 표지하며,
+그 사이일 경우 변하지 않았다($EXP$)고 표지하는 작업이다.
+뉴스 기사의 분류 작업이 끝나면, 뉴스의 내용을 이루고 있는 각 단어들에 대한 나이브 베이즈를 가정하고 분류기를 학습 시킨다.
+분류기의 입력은 뉴스 기사의 내용이며 출력은 분류 표지 ($UP, DOWN, EXP$) 중 하나이다.
+마지막으로 이렇게 학습된 분류기를 이용하여, 최고의 성능을 갖는 정렬 시간 간격과 분류 threshold를 찾는다.
+
+선행 연구의 결과는 논문 상에 정확한 정확도를 명시하지는 않았지만,
+분류 threshold $\rho_{positive}=0.002$, $\rho_{negative}=-0.002$일 때 무작위 예측 보다 높은 성능을 보였고,
+선행 연구 논문에서 제시한 그래프를 볼 때 그때의 $accuracy$는 약 $40\%$였다.
+정렬 시간 간격은 $[-20,0]$과 $[0,20]$일 때 가장 의미 있는 성능을 내었으며,
+$precision$과 $recall$은 각 표지별로 다르지만 $30\%$에서 $50\%$ 사이였다.
+
+\section{데이터 수집}
+
+\subsection{주가 데이터}
+
+주가 데이터를 얻은 방법
+이베스트투자증권
+Xing API
+COM
+C\# windows application
+file output
+mongodb
+종목, 날짜와 시각, 주가
+뉴스에 늦게 반응하는 개인 투자자의
+
+\subsection{뉴스 기사 데이터}
+
+뉴스 기사를 얻은 방법
+인터넷 포털 사이트 네이버
+chrome 개발자 도구로 모바일 사이트 분석
+REST api 알아내서 요청
+python BeautifulSoup
+mongodb
+종목, 날짜와 시각, 본문
+
+\section{학습 모델}
+
+뉴스 본문 - 형태소 분석 - bag of words - TF-IDF - MLP (Neural Net, softmax)
+
+\section{결과 및 분석}
+
+??
+
+\section{결론}
+
+인덱스 보정 (베타값)
+topic modelling 뉴스 걸러내기
+
+\section*{참고문헌}
+
+\begin{enumerate}[ {[}1{]} ]
+\item Gidofalvi, Gyozo, and Charles Elkan. ``Using news articles to predict stock price movements.'' \textit{Department of Computer Science and Engineering, University of California, San Diego} (2001).
+\end{enumerate}
 
 \end{document}
